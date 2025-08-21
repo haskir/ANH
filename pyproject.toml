@@ -1,0 +1,10 @@
+[project]
+name = "anh"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "loguru>=0.7.3",
+    "paramiko>=4.0.0",
+    "python-dotenv>=1.1.1",
+]
