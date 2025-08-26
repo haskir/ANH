@@ -50,9 +50,9 @@ class SshConnection:
         self.channel: paramiko.Channel | None = None
 
         self.sleep_time: int = sleep_time
-        self.__connect(passwords)
+        self._connect(passwords)
 
-    def __connect(self, passwords: list[str]) -> None:
+    def _connect(self, passwords: list[str]) -> None:
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         for password in passwords:
@@ -89,7 +89,7 @@ class SshConnection:
         raise PasswordError(f'Did not find correct password for {self.username}@{self.address}')
 
     def check_is_astra(self) -> bool:
-        self.channel.send(f'cat /etc/*rel* \n'.encode())
+        self.channel.send('cat /etc/*rel* \n'.encode())
         time.sleep(self.sleep_time)
         result = self.channel.recv(1024).decode()
         time.sleep(self.sleep_time)
@@ -113,7 +113,7 @@ class SshConnection:
                 logger.error(f'TimeoutError for {self.username}@{self.address}')
                 self.is_alive = False
 
-    def send_command(self, command):
+    def send_command(self, command: str | list[str]) -> None:
         if not self.is_alive:
             logger.error(f'{self.address} is not alive')
             return
@@ -125,7 +125,7 @@ class SshConnection:
             time.sleep(self.sleep_time)
             if "sudo" in command:
                 data = self.channel.recv(1024).decode()
-                logger.log("INFO", f'{data=}')
+                logger.info(data)
                 if "пароль" in data:
                     self.channel.send(self.password.encode() + "\n".encode())
                     time.sleep(self.sleep_time)
@@ -140,7 +140,7 @@ class SshConnection:
         self.send_command(new_password)
         self.password = new_password
         if change_root_also:
-            self.send_command(f'passwd root')
+            self.send_command('passwd root')
             self.send_command(new_password)
             self.send_command(new_password)
             self.root_password = new_password
@@ -155,3 +155,5 @@ class SshConnection:
             self.channel.send(f'{self.password}\n'.encode())
             time.sleep(3)
             self._log_output(command.decode())
+            self.send_command("exit")
+            self._connect([self.password])

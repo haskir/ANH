@@ -7,4 +7,5 @@ dependencies = [
     "loguru>=0.7.3",
     "paramiko>=4.0.0",
     "python-dotenv>=1.1.1",
+    "ruff>=0.12.10",
 ]
