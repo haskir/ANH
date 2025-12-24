@@ -4,10 +4,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 from dotenv import load_dotenv
-from loguru import logger
 
-from lib.scripts import SetTimeSync
-from lib.ssh_connection import PasswordError, SshConnection
+from lib.scenarios import process_host
+from lib.scripts import InstallEDRRedOS
+from lib.ssh_connection import SshConnection
 from utils import Pinger
 
 
@@ -16,34 +16,6 @@ def load_alive_hosts(filename: str) -> list[str]:
         hosts = [line.strip() for line in f if line.strip()]
 
     return Pinger.multi_ping(hosts)
-
-
-def process_host(
-    host: str,
-    username: str,
-    old_passwords: list[str],
-    new_password: str,
-    scripts: list[list[str]] | None = None,
-) -> SshConnection | None:
-    def process_script(sc: list[str]) -> None:
-        for cmd in sc:
-            connection.send_command(cmd)
-
-    try:
-        connection = SshConnection(host, username, old_passwords)
-        if connection.password != new_password:
-            connection.change_password(new_password, change_root_also=True)
-        connection.add_local_user_to_wheel()
-        if scripts:
-            for script in scripts:
-                process_script(script)
-
-        return connection
-    except PasswordError:
-        logger.error(f"Password error on {host}")
-    except Exception as e:
-        logger.error(f"Unexpected error on {host}: {repr(e)}")
-    return None
 
 
 def main(username: str, old_passwords: list[str], new_password: str, host_file: str):
@@ -62,7 +34,8 @@ def main(username: str, old_passwords: list[str], new_password: str, host_file: 
                 username=username,
                 old_passwords=old_passwords,
                 new_password=new_password,
-                scripts=[SetTimeSync],
+                scripts=[InstallEDRRedOS],
+                only_redhat=True,
             )
             for host in alive_hosts
         ]
