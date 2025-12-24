@@ -145,10 +145,10 @@ class SshConnection:
         else:
             self.channel.send(command.encode() + "\n".encode())
             time.sleep(self.sleep_time)
-            if "sudo" in command:
-                data = self.channel.recv(1024).decode()
+            if command.lstrip().startswith("sudo"):
+                data: str = self.channel.recv(1024).decode()
                 logger.info(data)
-                if "пароль" in data:
+                if "пароль" in data.lower():
                     self.channel.send(self.password.encode() + "\n".encode())
                     time.sleep(self.sleep_time)
             self._log_output(command)

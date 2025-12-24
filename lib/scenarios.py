@@ -12,15 +12,11 @@ def process_host(
     only_astra: bool = False,
     only_redhat: bool = False,
 ) -> SshConnection | None:
-    def process_script(sc: list[str]) -> None:
-        for cmd in sc:
-            connection.send_command(cmd)
-
     try:
         connection = SshConnection(host, username, old_passwords)
         if connection.password != new_password:
             connection.change_password(new_password, change_root_also=True)
-        connection.add_local_user_to_wheel()
+        # connection.add_local_user_to_wheel()
         if not scripts:
             return connection
         if only_astra and not connection.is_astra:
@@ -30,7 +26,7 @@ def process_host(
             print(f"{host} is astra: skip")
             return connection
         for script in scripts:
-            process_script(script)
+            connection.send_command(script)
 
         return connection
     except PasswordError:
