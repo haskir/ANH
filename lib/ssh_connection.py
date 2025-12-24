@@ -4,10 +4,14 @@ import time
 import paramiko
 from loguru import logger
 
-__all__ = ['SshConnection', 'PasswordError',]
+__all__ = [
+    "SshConnection",
+    "PasswordError",
+]
 
 # 7-bit C1 ANSI sequences
-ansi_escape = re.compile(r'''
+ansi_escape = re.compile(
+    r"""
     \x1B  # ESC
     (?:   # 7-bit C1 Fe (except CSI)
         [@-Z\\-_]
@@ -17,7 +21,9 @@ ansi_escape = re.compile(r'''
         [ -/]*  # Intermediate bytes
         [@-~]   # Final byte
     )
-''', re.VERBOSE)
+""",
+    re.VERBOSE,
+)
 
 
 class PasswordError(Exception):
@@ -26,31 +32,43 @@ class PasswordError(Exception):
 
 class SshConnection:
     def __init__(
-            self,
-            address: str,
-            username: str,
-            passwords: list[str],
-            root_password: str = None,
-            port: int = 22,
-            sleep_time: int = 1,
-            timeout: int = 5,
+        self,
+        address: str,
+        username: str,
+        passwords: list[str],
+        root_password: str | None = None,
+        port: int = 22,
+        sleep_time: int = 1,
+        timeout: int = 5,
     ):
         if len(passwords) > 4:
             raise AttributeError("Слишком много паролей, возможен locked out ip")
         self.address: str = address
         self.username: str = username
-        self.password: str | None = None
+        self.password: str = ""
         self.root_password: str | None = root_password
         self.port: int = port
         self.timeout: int = timeout
 
         self.is_alive: bool = False
 
-        self.client: paramiko.SSHClient | None = None
-        self.channel: paramiko.Channel | None = None
+        self._client: paramiko.SSHClient | None = None
+        self._channel: paramiko.Channel | None = None
 
         self.sleep_time: int = sleep_time
         self._connect(passwords)
+
+    @property
+    def client(self) -> paramiko.SSHClient:
+        if not self._client:
+            raise RuntimeError("Client is not connected")
+        return self._client
+
+    @property
+    def channel(self) -> paramiko.Channel:
+        if not self._channel:
+            raise RuntimeError("Channel is not connected")
+        return self._channel
 
     def _connect(self, passwords: list[str]) -> None:
         client = paramiko.SSHClient()
@@ -62,12 +80,12 @@ class SshConnection:
                     username=self.username,
                     password=password,
                     port=self.port,
-                    timeout=self.timeout
+                    timeout=self.timeout,
                 )
                 channel = client.invoke_shell(width=230, height=50)
                 channel.settimeout(self.timeout)
-                self.client = client
-                self.channel = channel
+                self._client = client
+                self._channel = channel
                 self.password = password
 
                 if not self.root_password:
@@ -75,21 +93,25 @@ class SshConnection:
                 self.is_alive = True
 
                 logger.add(
-                    sink=f'logs/{self.address}.log',
-                    format='{time:MMMM D > HH:mm:ss!UTC} | {level} | {message}'
+                    sink=f"logs/{self.address}.log",
+                    format="{time:MMMM D > HH:mm:ss!UTC} | {level} | {message}",
                 )
-                logger.info(f'Connected to {self.address} with {self.password}')
+                logger.info(f"Connected to {self.address} with {self.password}")
 
                 self.is_astra = self.check_is_astra()
                 return
-            except paramiko.ssh_exception.AuthenticationException:
-                logger.debug(f'Wrong pass {password} for {self.username}@{self.address}')
+            except paramiko.AuthenticationException:
+                logger.debug(
+                    f"Wrong pass {password} for {self.username}@{self.address}"
+                )
             except TimeoutError:
-                logger.error(f'TimeoutError for {self.username}@{self.address}')
-        raise PasswordError(f'Did not find correct password for {self.username}@{self.address}')
+                logger.error(f"TimeoutError for {self.username}@{self.address}")
+        raise PasswordError(
+            f"Did not find correct password for {self.username}@{self.address}"
+        )
 
     def check_is_astra(self) -> bool:
-        self.channel.send('cat /etc/*rel* \n'.encode())
+        self.channel.send("cat /etc/*rel* \n".encode())
         time.sleep(self.sleep_time)
         result = self.channel.recv(1024).decode()
         time.sleep(self.sleep_time)
@@ -97,25 +119,25 @@ class SshConnection:
 
     def _log_output(self, command: str) -> None:
         while True:
-            data = ""
+            data: str = ""
             try:
                 if self.channel.recv_ready():
                     data += self.channel.recv(1024).decode()
-                    data = ansi_escape.sub('', data)
+                    data = ansi_escape.sub("", data)
                     data = data.replace("\r", " ").replace("\n", " ")
                     if data:
-                        logger.info(f'{command = } {data = }')
+                        logger.info(f"{command = } {data = }")
                 else:
                     break
             except paramiko.SSHException as ssh_e:
-                logger.error(f'{self.address} -> {ssh_e}')
+                logger.error(f"{self.address} -> {ssh_e}")
             except TimeoutError:
-                logger.error(f'TimeoutError for {self.username}@{self.address}')
+                logger.error(f"TimeoutError for {self.username}@{self.address}")
                 self.is_alive = False
 
     def send_command(self, command: str | list[str]) -> None:
         if not self.is_alive:
-            logger.error(f'{self.address} is not alive')
+            logger.error(f"{self.address} is not alive")
             return
         if isinstance(command, list):
             for line in command:
@@ -131,28 +153,30 @@ class SshConnection:
                     time.sleep(self.sleep_time)
             self._log_output(command)
 
-    def change_password(self, new_password: str, change_root_also: bool = False) -> None:
+    def change_password(
+        self, new_password: str, change_root_also: bool = False
+    ) -> None:
         if self.password == new_password:
             return
         self.send_command("sudo su")
-        self.send_command(f'passwd {self.username}')
+        self.send_command(f"passwd {self.username}")
         self.send_command(new_password)
         self.send_command(new_password)
         self.password = new_password
         if change_root_also:
-            self.send_command('passwd root')
+            self.send_command("passwd root")
             self.send_command(new_password)
             self.send_command(new_password)
             self.root_password = new_password
         self.send_command("exit")
 
     def add_local_user_to_wheel(self) -> None:
-        """ Add local user to wheel group """
+        """Add local user to wheel group"""
         if not self.is_astra:
             command = 'su -c "usermod -a -G wheel fatalocal"\n'.encode()
             self.channel.send(command)
             time.sleep(5)
-            self.channel.send(f'{self.password}\n'.encode())
+            self.channel.send(f"{self.password}\n".encode())
             time.sleep(3)
             self._log_output(command.decode())
             self.send_command("exit")

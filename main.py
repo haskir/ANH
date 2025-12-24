@@ -2,11 +2,12 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+
 from dotenv import load_dotenv
 from loguru import logger
 
 from lib.scripts import SetTimeSync
-from lib.ssh_connection import SshConnection, PasswordError
+from lib.ssh_connection import PasswordError, SshConnection
 from utils import Pinger
 
 
@@ -22,7 +23,7 @@ def process_host(
     username: str,
     old_passwords: list[str],
     new_password: str,
-    scripts: list[list[str]] = None,
+    scripts: list[list[str]] | None = None,
 ) -> SshConnection | None:
     def process_script(sc: list[str]) -> None:
         for cmd in sc:
@@ -66,7 +67,7 @@ def main(username: str, old_passwords: list[str], new_password: str, host_file: 
             for host in alive_hosts
         ]
         for future in as_completed(futures):
-            result: SshConnection = future.result()
+            result: SshConnection | None = future.result()
             if result:
                 pass
                 # hosts_info[result.address] = (result.password, result.is_astra)
@@ -77,9 +78,9 @@ def main(username: str, old_passwords: list[str], new_password: str, host_file: 
 
 def creds() -> tuple[str, list[str], str]:
     load_dotenv()
-    username: str = os.getenv("USER_NAME")
+    username: str = os.getenv("USER_NAME") or ""
     old_passwords: list[str] = os.getenv("OLD_PASSWORDS", "").split(",")
-    new_password: str = os.getenv("NEW_PASSWORD")
+    new_password: str = os.getenv("NEW_PASSWORD") or ""
     return username, old_passwords, new_password
 
 
