@@ -5,10 +5,9 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
+from lib.pinger import Pinger
 from lib.scenarios import process_host
-from lib.scripts import InstallEDRRedOS
 from lib.ssh_connection import SshConnection
-from utils import Pinger
 
 
 def load_alive_hosts(filename: str) -> list[str]:
@@ -34,16 +33,16 @@ def main(username: str, old_passwords: list[str], new_password: str, host_file: 
                 username=username,
                 old_passwords=old_passwords,
                 new_password=new_password,
-                scripts=[InstallEDRRedOS],
+                scripts=[],
                 only_redhat=True,
             )
             for host in alive_hosts
         ]
         for future in as_completed(futures):
-            result: SshConnection | None = future.result()
-            if result:
-                pass
-                # hosts_info[result.address] = (result.password, result.is_astra)
+            connection: SshConnection | None = future.result()
+            if connection is None:
+                return
+            connection.run_installer()
 
     with open("results/hosts_is_astra.json", "w") as f:
         json.dump(hosts_info, f, ensure_ascii=False, indent=2)

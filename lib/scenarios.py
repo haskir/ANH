@@ -26,7 +26,7 @@ def process_host(
             print(f"{host} is astra: skip")
             return connection
         for script in scripts:
-            connection.send_command(script)
+            connection.send_script(script)
 
         return connection
     except PasswordError:

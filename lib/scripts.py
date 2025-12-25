@@ -36,16 +36,46 @@ DeleteDrweb: list[str] = [
     "sudo nohup /opt/drweb.com/bin/remove.sh --non-interactive &",
 ]
 
+_web_server: str = "10.192.0.172"
 _edr_server: str = "10.192.145.19"
 
-InstallEDRRedOS: list[str] = [
-    "sudo su",
-    f"BZ_AUTHORITY_SERVICE={_edr_server}:9992 "
-    f"BZ_SENSORS_SERVICE={_edr_server}:9991 "
-    f"BZ_POLLING_PERIOD=300s "
-    f"BZ_DIAL_TIMEOUT=10s "
-    f"BZ_AGENT_GROUPS=LINDEF "
-    f"BZ_LOG_LEVEL=debug "
-    f"dnf install -y /tmp/bzsensor.rpm > /tmp/bzsensor.log",
-    "exit",
-]
+
+def get_install_script(
+    web_server: str = _web_server,
+    server_ip: str = _edr_server,
+) -> str:
+    # Используем одинарные кавычки для обертки f-строки, чтобы внутри были двойные
+    return f"""#!/bin/bash
+# Логируем все действия в файл на хосте для отладки
+exec > /tmp/edr_install.log 2>&1
+
+echo "--- Start Installation: $(date) ---"
+
+echo "Downloading RPM..."
+wget http://{web_server}/bzsensor.rpm -q -O /tmp/bzsensor.rpm
+if [ $? -ne 0 ]; then
+    echo "ERROR: Failed to download RPM from {web_server}"
+    exit 1
+fi
+
+export BZ_AUTHORITY_SERVICE={server_ip}:9992
+export BZ_SENSORS_SERVICE={server_ip}:9991
+export BZ_POLLING_PERIOD=300s
+export BZ_DIAL_TIMEOUT=10s
+export BZ_AGENT_GROUPS=LINDEF
+export BZ_LOG_LEVEL=debug
+
+echo "Installing RPM via DNF..."
+dnf install -y /tmp/bzsensor.rpm
+RESULT=$?
+
+if [ $RESULT -eq 0 ]; then
+    echo "SUCCESS: EDR installed successfully."
+    rm -f /tmp/bzsensor.rpm
+else
+    echo "ERROR: Installation failed with exit code $RESULT"
+fi
+
+echo "--- Finished: $(date) ---"
+exit $RESULT
+"""
